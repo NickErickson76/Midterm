@@ -1,0 +1,332 @@
+#include "msp.h"
+#include <stdio.h>
+#include "time.h"
+#include "Liquid_Crystal.h"
+
+
+//This section defines all pins used as either a bank or port
+//This was taken from Professor Brakora's example code
+#define R0_BANK     P5
+ #define R0_PORT     BIT6
+ #define R1_BANK     P6
+ #define R1_PORT     BIT6
+ #define R2_BANK     P6
+ #define R2_PORT     BIT7
+ #define R3_BANK     P2
+ #define R3_PORT     BIT3
+
+ #define C0_BANK     P5
+ #define C0_PORT     BIT1
+ #define C1_BANK     P3
+ #define C1_PORT     BIT5
+ #define C2_BANK     P3
+ #define C2_PORT     BIT7
+
+
+
+void ports(void);
+int readcolumn();
+int Read_Keypad(void);
+void motorspeed(void);
+int readKeypad(void);
+void timerA(int Ton);
+
+
+enum states{           // Names the states
+    MENU,
+    MOTORMENU,
+    DOORMENU,
+    LIGHTSMENU,
+    RUNMOTOR,
+    DOOROPEN,
+    DOORCLOSED,
+    SCREENSAVER,
+};
+
+void main(void)
+{
+    int key = 0;
+    ports();    //Initialize ports
+    lcdInit();
+    WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
+    P4->DIR  = (EN + RS + DATA);   // Make pins outputs.          just change P4 for any other port keeping lower pins for data
+    P4->OUT &=~(BIT4 | BIT5)   ;   // Clear the EN and RS pins    just change P4 for any other port keeping BIT4 and BIT5 for E and RS
+    SysTick_initialization();
+    enum states state = MENU;
+    while(1)
+    {
+        
+        switch(state){
+
+
+
+                  case MENU:
+                   printf("\n 1. Door\n 2. Motor\n 3. Lights\n");
+                    while(1)
+                    {
+                    key = Read_Keypad();
+                  if(key == 1)
+                  {
+
+                      state = DOORMENU;
+                      break;
+                  }
+
+                  if(key == 2)
+                  {
+
+                      state = MOTORMENU;
+                      break;
+                  }
+
+                  if(key == 3)
+                  {
+
+                      state = LIGHTSMENU;
+                      break;
+                  }
+                    }
+                      break;
+
+                  case DOORMENU:
+
+                      printf("1. Door Open\n2. Door Closed\n");
+                      while(1)
+                      {
+                      if(key == 1)
+                      {
+                          state = DOOROPEN;
+                          break;
+                      }
+                      if(key == 2)
+                      {
+                          state = DOORCLOSED;
+                          break;
+                      }
+                      }
+                      break;
+
+                  case MOTORMENU:
+
+                      printf("Input speed as a percentage:");
+
+                      motorspeed();
+
+                      break;
+
+                  case LIGHTSMENU:
+
+
+                       break;
+
+                  case RUNMOTOR:
+
+
+                       break;
+
+                  case DOOROPEN:
+                      
+
+                       break;
+
+                  case DOORCLOSED:
+                      //lcdClear();
+
+                        break;
+
+    }
+
+}
+}
+
+void motorspeed(void)
+{
+
+    int keypress = 0;
+    int k = 0;
+    int j = 0;
+    int pins[3];
+    int speed = 0;
+
+    while(j < 1)
+    {
+    keypress = readKeypad();
+        if(keypress != 98)
+        {
+          // Stores values in the array
+          pins[2]=pins[1];
+          pins[1]=pins[0];
+          pins[0]=keypress;
+        }
+    if(keypress == 98) // Prints the array when the # key is pressed on the keypad
+          {
+           for(k=2; k>=0; --k)
+           {
+           printf("%d", pins[k]);
+
+           }
+           printf("\n");
+           if(pins[2] == 0 || (pins[2] == 1 && pins[1] == 0 && pins[0] == 0))
+           {
+           speed = ((pins[2] * 100) + (pins[1] * 10) + pins[0]);
+           j = 1;
+           }
+           else
+           {
+           printf("Please input a different number\n");
+           }
+          }
+    }
+
+    timerA(speed);
+
+
+}
+
+int readKeypad(void)
+{
+    int num = 0;
+
+    int i = 0;
+
+    while(1)
+      {
+
+          i = 0;
+          num = 10;
+          i = Read_Keypad();
+
+          //Stores the values into the num variable
+              if(i & BIT0)
+                  num = 1;
+              if(i & BIT1)
+                  num = 4;
+              if(i & BIT2)
+                  num = 7;
+              if(i & BIT4)
+                  num = 2;
+              if(i & BIT5)
+                  num = 5;
+              if(i & BIT6)
+                  num = 8;
+              if(i & BIT7)
+                  num = 0;
+              if(i & BIT8)
+                  num = 3;
+              if(i & BIT9)
+                  num = 6;
+              if(i & BITA)
+                  num = 9;
+              if(i & BITB)
+                  num = 98;
+              delay_ms(100);
+            if(num != 10)
+            {
+            return (num);
+            }
+         }
+
+
+
+      }
+
+
+void timerA(int Ton)
+{
+    P2->DIR |= BIT4; // P2.4 set TA0.1
+    P2->SEL0 |= BIT4;
+    P2->SEL1 &= ~(BIT4);
+    TIMER_A0->CTL |= BIT6;
+    TIMER_A0->CCR[0] = (75000/2); // PWM Period (# cycles of clock)
+    TIMER_A0->CCTL[1] = TIMER_A_CCTLN_OUTMOD_7; // CCR1 reset/set mode 7
+    TIMER_A0->CCR[1] = ((Ton*750)/2); // CCR1 PWM duty cycle in 10ths of percent
+    TIMER_A0->CTL = TIMER_A_CTL_SSEL__SMCLK | // use SMCLK
+    TIMER_A_CTL_MC__UP | // in Up mode
+    TIMER_A_CTL_CLR;
+}
+
+int Read_Keypad(void)
+{
+        int keys = 0;
+        C0_BANK->DIR |= C0_PORT;
+        C0_BANK->OUT |= C0_PORT;
+        keys = (readcolumn() << 0);
+
+        C0_BANK->DIR &=~ C0_PORT;
+        C0_BANK->OUT &=~ C0_PORT;
+
+        C1_BANK->DIR |= C1_PORT;
+        C1_BANK->OUT |= C1_PORT;
+        keys |= (readcolumn() << 4);
+
+        C1_BANK->DIR &=~ C1_PORT;
+        C1_BANK->OUT &=~ C1_PORT;
+
+        C2_BANK->DIR |= C2_PORT;
+        C2_BANK->OUT |= C2_PORT;
+        keys |= (readcolumn() << 8);
+
+        C2_BANK->DIR &=~ C2_PORT;
+        C2_BANK->OUT &=~ C2_PORT;
+        return(keys);
+}
+//This function initializes SysTick
+
+
+//This function read the rows within a column and returns a bit based on which row is pressed
+int readcolumn()
+{
+
+    if(R0_BANK->IN & R0_PORT)
+    {
+        delay_ms(100);
+        return(BIT0);
+    }
+    if(R1_BANK->IN & R1_PORT)
+    {
+        delay_ms(100);
+        return(BIT1);
+    }
+    if(R2_BANK->IN & R2_PORT)
+    {
+        delay_ms(100);
+        return(BIT2);
+    }
+    if(R3_BANK->IN & R3_PORT)
+    {
+        delay_ms(100);
+        return(BIT3);
+    }
+
+    return(0);
+}
+// This function initializes all of the ports required for the keypad
+void ports(void)
+{
+    R0_BANK->DIR &=~ R0_PORT;
+      R0_BANK->REN |= R0_PORT;
+      R0_BANK->OUT &=~ R0_PORT;
+      R1_BANK->DIR &= ~R1_PORT;
+      R1_BANK->REN |= R1_PORT;
+      R1_BANK->OUT &= ~R1_PORT;
+      R2_BANK->DIR &= ~R2_PORT;
+      R2_BANK->REN |= R2_PORT;
+      R2_BANK->OUT &= ~R2_PORT;
+      R3_BANK->DIR &= ~R3_PORT;
+      R3_BANK->REN |= R3_PORT;
+      R3_BANK->OUT &= ~R3_PORT;
+      C0_BANK->DIR &= ~C0_PORT;
+      C0_BANK->REN |=  C0_PORT;
+      C0_BANK->OUT &= ~C0_PORT;
+      C1_BANK->DIR &= ~C1_PORT;
+      C1_BANK->REN |=  C1_PORT;
+      C1_BANK->OUT &= ~C1_PORT;
+      C2_BANK->DIR &= ~C2_PORT;
+      C2_BANK->REN |=  C2_PORT;
+      C2_BANK->OUT &= ~C2_PORT;
+      P6->DIR |= BIT0;
+
+
+
+
+}
